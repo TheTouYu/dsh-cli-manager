@@ -1,0 +1,85 @@
+{
+  "id": "demo",
+  "name": "演示模块",
+  "order": 90,
+  "description": "一个虚构的第二模块：证明新增项目只需要往 modules/ 放一个 JSON 文件，不用改任何代码。",
+  "cwd": "/tmp",
+  "notes": [
+    "本模块里的命令全部无害：echo / 流式输出 / 超时演示。",
+    "「危险确认演示」危险级为高，但实际只执行 echo —— 用来验证二次确认链路。"
+  ],
+  "commands": [
+    {
+      "id": "hello",
+      "name": "打个招呼",
+      "description": "最简单的无参数命令，验证 argv 执行路径。",
+      "risk": "readonly",
+      "timeoutSec": 10,
+      "argv": [
+        "echo",
+        "hello"
+      ]
+    },
+    {
+      "id": "greet",
+      "name": "参数化问候",
+      "description": "演示参数模板：修改名字后，卡片上「将要执行的命令」实时变化；参数受 pattern 约束。",
+      "risk": "low",
+      "timeoutSec": 10,
+      "argv": [
+        "echo",
+        "hi-{{name}}"
+      ],
+      "params": [
+        {
+          "name": "name",
+          "label": "名字",
+          "default": "world",
+          "pattern": "^[A-Za-z0-9_-]{1,20}$",
+          "description": "只允许字母、数字、下划线、连字符（1-20 字符）"
+        }
+      ]
+    },
+    {
+      "id": "stream-demo",
+      "name": "流式输出演示",
+      "description": "每 0.3 秒输出一行，共 5 行，用来验证 SSE 是真实时流式，而不是等进程结束后一次性返回。",
+      "risk": "readonly",
+      "timeoutSec": 15,
+      "shell": "for i in 1 2 3 4 5; do echo 流式第 $i 行; sleep 0.3; done"
+    },
+    {
+      "id": "confirm-demo",
+      "name": "危险确认演示",
+      "description": "危险级=高，执行前必须二次确认；确认后只执行 echo，没有任何副作用。",
+      "risk": "high",
+      "timeoutSec": 10,
+      "confirmHint": "演示用：确认后只会执行 echo，不会修改任何文件。",
+      "shell": "echo 危险操作已确认"
+    },
+    {
+      "id": "timeout-demo",
+      "name": "超时演示",
+      "description": "sleep 5 但 timeoutSec=1：验证超时后整个进程组被终止（应为 timed_out / 退出码非 0）。",
+      "risk": "readonly",
+      "timeoutSec": 1,
+      "shell": "sleep 5"
+    },
+    {
+      "id": "exit-3-demo",
+      "name": "非零退出码演示",
+      "description": "固定以退出码 3 结束，并分别向 stdout / stderr 写一行：验证流式输出 + 非零退出码 + 耗时的完整链路，与游戏是否运行无关。",
+      "risk": "readonly",
+      "timeoutSec": 10,
+      "shell": "echo 这是标准输出; echo 这是标准错误 >&2; exit 3"
+    },
+    {
+      "id": "sleep-demo",
+      "name": "长运行演示（可停止）",
+      "description": "sleep 5：用于验证「停止」按钮会终止整个进程组（应显示已取消）。",
+      "risk": "readonly",
+      "timeoutSec": 30,
+      "shell": "sleep 5"
+    }
+  ]
+}

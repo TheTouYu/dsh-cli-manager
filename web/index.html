@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="description" content="通用 CLI 命令管理器：模块化配置、命令可见、本机执行、流式输出、危险确认。" />
+  <title>CLI 命令管理器</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">⌘</span>
+        <div class="brand-text">
+          <h1>CLI 命令管理器</h1>
+          <p>模块化 · 本机执行 · 流式输出 · 危险确认</p>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button id="health-pill" class="health-pill" type="button" title="服务状态（点击重新检测）">
+          <span class="dot" aria-hidden="true"></span><span id="health-text">检测中…</span>
+        </button>
+        <button id="reload-btn" class="ghost-btn" type="button" title="重新加载 modules/ 下的配置（快捷键 r）">重载配置</button>
+        <button id="help-btn" class="ghost-btn" type="button" title="快捷键（?）">快捷键</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <section class="side-section">
+          <h2 class="side-title">模块</h2>
+          <div id="module-list" class="module-list" role="navigation" aria-label="模块列表"></div>
+        </section>
+        <section class="side-section side-history">
+          <h2 class="side-title">本次会话运行</h2>
+          <div id="history-list" class="history-list"></div>
+        </section>
+        <div class="side-foot">
+          <span class="side-foot-label">配置目录</span>
+          <span id="modules-dir" class="mono" title="模块配置目录"></span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <div id="banner" class="banner" hidden></div>
+
+        <div class="searchrow">
+          <div class="searchwrap">
+            <span class="search-icon" aria-hidden="true">⌕</span>
+            <input id="search" type="search" placeholder="搜索命令 / 说明 / 命令文本…（按 / 聚焦）"
+                   autocomplete="off" spellcheck="false" aria-label="搜索命令" />
+            <kbd class="kbd">/</kbd>
+          </div>
+          <div id="risk-filters" class="chips" role="group" aria-label="危险级筛选"></div>
+        </div>
+
+        <div class="listhead">
+          <span id="list-meta" class="muted"></span>
+          <span>↑↓ 选择 · Enter 执行 · c 复制 · ? 快捷键</span>
+        </div>
+
+        <div id="module-notes" class="module-notes" hidden></div>
+
+        <div class="workspace">
+          <section class="listpane" aria-label="命令列表">
+            <div id="command-list" class="command-list" role="listbox" tabindex="-1"></div>
+          </section>
+
+          <section class="runpanel" aria-label="执行输出">
+            <header class="run-head">
+              <div class="run-headline">
+                <span id="run-eyebrow" class="run-eyebrow">执行输出</span>
+                <h2 id="run-title">尚未执行</h2>
+              </div>
+              <div class="run-meta">
+                <span id="run-status" class="pill idle">空闲</span>
+                <span id="run-exit" class="meta-item">退出码 —</span>
+                <span id="run-duration" class="meta-item">耗时 —</span>
+                <span id="run-pid" class="meta-item"></span>
+              </div>
+            </header>
+
+            <div class="run-cmd">
+              <code id="run-cmd-text">选择左侧命令并执行，输出会实时出现在这里</code>
+              <button id="run-cmd-copy" class="ghost-btn" type="button" title="复制将要执行的命令">复制</button>
+            </div>
+
+            <div class="run-toolbar">
+              <button id="run-cancel" class="danger-btn" type="button" disabled>停止</button>
+              <button id="run-copy-out" class="ghost-btn" type="button" disabled>复制输出</button>
+              <button id="run-rerun" class="ghost-btn" type="button" disabled>重新运行</button>
+              <span id="run-hint" class="muted"></span>
+              <label class="follow-toggle"><input id="autoscroll" type="checkbox" checked /> 跟随输出</label>
+            </div>
+
+            <pre id="run-output" class="output" tabindex="0" aria-live="polite"></pre>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 id="modal-title">确认执行危险命令</h2>
+      <div id="modal-body" class="modal-body"></div>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="ghost-btn" type="button">取消（Esc）</button>
+        <button id="modal-confirm" class="danger-btn" type="button">我确认执行（Enter）</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="help" class="modal" hidden>
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <h2 id="help-title">快捷键</h2>
+      <table class="help-grid">
+        <tbody>
+          <tr><td><kbd>/</kbd> 或 <kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>聚焦搜索框（搜索范围：命令名 / 说明 / 命令文本 / 模块名）</td></tr>
+          <tr><td><kbd>↑</kbd> <kbd>↓</kbd> 或 <kbd>j</kbd> <kbd>k</kbd></td><td>选择上一条 / 下一条命令</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>执行选中命令；危险级中/高会先弹出二次确认</td></tr>
+          <tr><td><kbd>c</kbd></td><td>复制选中命令的「将要执行的 shell 命令」</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>在参数输入框内直接执行当前命令</td></tr>
+          <tr><td><kbd>r</kbd></td><td>重新加载 modules/*.json</td></tr>
+          <tr><td><kbd>?</kbd></td><td>打开 / 关闭本帮助</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>关闭弹窗；在搜索框内则清空并退出搜索</td></tr>
+          <tr><td><kbd>Tab</kbd></td><td>在参数输入框、按钮之间移动焦点</td></tr>
+        </tbody>
+      </table>
+      <div class="modal-actions">
+        <button id="help-close" class="ghost-btn" type="button">知道了（Esc）</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

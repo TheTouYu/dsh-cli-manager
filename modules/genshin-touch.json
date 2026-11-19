@@ -1,0 +1,163 @@
+{
+  "id": "genshin-touch",
+  "name": "原神触摸/串流",
+  "order": 10,
+  "description": "原神触摸注入与串流调试命令。cwd 固定为 genshin-mobile 项目目录，命令与真实脚本一一对应。",
+  "cwd": "/home/h/dsh-plugins/.scratch/genshin-mobile",
+  "notes": [
+    "游戏未运行时，mobui-ui.sh 会打印警告并以退出码 3 结束——这是正常现象，用来验证流式输出与非零退出码。",
+    "危险级为中/高的命令在界面上会弹出二次确认，后端同样强制要求 confirm: true。",
+    "启动游戏/注入探针前请确认已获得授权；本工具不会替你决定是否启动游戏。",
+    "「调灵敏度」会向 build/mobui29.cmds 追加一行，不重启游戏、不重新注入。"
+  ],
+  "commands": [
+    {
+      "id": "play-inject",
+      "name": "启动游戏+注入+切 UI",
+      "description": "一键起原神（独立 systemd unit，dsh 重启不连坐）→ 等登录页 → 注入 mobui29.dll → 切移动端 UI。",
+      "risk": "medium",
+      "timeoutSec": 300,
+      "confirmHint": "这会真的启动原神并注入探针，可能占用大量内存/显存；请确认当前没有正在运行的游戏实例。",
+      "argv": ["./mobui-play.sh", "mobui29.dll"]
+    },
+    {
+      "id": "ui-touch",
+      "name": "切移动端 UI",
+      "description": "向 build/mobui29.cmds 追加 touch_null，探针约 1s 内切成移动端 UI（已在移动端时不会重复写）。",
+      "risk": "low",
+      "timeoutSec": 30,
+      "argv": ["./mobui-ui.sh", "touch"]
+    },
+    {
+      "id": "ui-pc",
+      "name": "切 PC UI",
+      "description": "向 build/mobui29.cmds 追加 uipc，需要 mobui28 及以上探针。",
+      "risk": "low",
+      "timeoutSec": 30,
+      "argv": ["./mobui-ui.sh", "pc"]
+    },
+    {
+      "id": "ui-status",
+      "name": "查当前 UI 模式",
+      "description": "只读：从 build/mobui29.log 读取最近一次 STATE slots 判断 mode9EC0。游戏没在跑时会以退出码 3 结束。",
+      "risk": "readonly",
+      "timeoutSec": 30,
+      "argv": ["./mobui-ui.sh", "status"]
+    },
+    {
+      "id": "set-gain",
+      "name": "调灵敏度",
+      "description": "向 build/mobui29.cmds 追加 gain <值>；这是唯一需要 shell 重定向的命令，参数只接受 0-999 的整数。",
+      "risk": "low",
+      "timeoutSec": 15,
+      "shell": "printf 'gain {{gain}}\\n' >> build/mobui29.cmds",
+      "params": [
+        {
+          "name": "gain",
+          "label": "灵敏度增益",
+          "default": "35",
+          "pattern": "^[0-9]{1,3}$",
+          "description": "写入 mobui29.cmds 的 gain 值（整数 0-999）"
+        }
+      ]
+    },
+    {
+      "id": "touchd-start",
+      "name": "起触摸守护",
+      "description": "用 systemd-run 起 transient unit mobui-touchd（auto 模式，默认端口 51721）。触摸守护负责把平板触摸读成 UDP。",
+      "risk": "low",
+      "timeoutSec": 30,
+      "argv": [
+        "systemd-run",
+        "--user",
+        "--collect",
+        "--unit=mobui-touchd",
+        "--working-directory=/home/h/dsh-plugins/.scratch/genshin-mobile/tools",
+        "/home/h/dsh-plugins/.scratch/genshin-mobile/tools/touchd",
+        "auto",
+        "{{port}}",
+        "{{index}}"
+      ],
+      "params": [
+        {
+          "name": "port",
+          "label": "UDP 端口",
+          "default": "51721",
+          "pattern": "^[0-9]{2,5}$",
+          "description": "touchd 监听端口（2-5 位数字）"
+        },
+        {
+          "name": "index",
+          "label": "设备序号",
+          "default": "1",
+          "pattern": "^[0-9]{1,2}$",
+          "description": "传给 touchd 的第 3 个参数，默认 1"
+        }
+      ]
+    },
+    {
+      "id": "touchd-stop",
+      "name": "停止触摸守护",
+      "description": "停止 transient unit mobui-touchd（不存在时 systemctl 会报错，属正常）。",
+      "risk": "low",
+      "timeoutSec": 30,
+      "argv": ["systemctl", "--user", "stop", "mobui-touchd"]
+    },
+    {
+      "id": "verify-selftest",
+      "name": "离线验收（自检）",
+      "description": "只跑 verify-offline.sh --selftest（离线自检，不碰探针单例）。游戏开着时不要跑 full 模式。",
+      "risk": "low",
+      "timeoutSec": 300,
+      "argv": ["bash", "verify-offline.sh", "--selftest"]
+    },
+    {
+      "id": "perf-sample",
+      "name": "性能采样",
+      "description": "用 tools/perf-sample.py 采样 N 秒到 CSV（只读观测，不改游戏状态）。",
+      "risk": "readonly",
+      "timeoutSec": 1050,
+      "argv": ["python3", "tools/perf-sample.py", "{{seconds}}", "{{output}}"],
+      "params": [
+        {
+          "name": "seconds",
+          "label": "采样秒数",
+          "default": "60",
+          "pattern": "^[1-9][0-9]{0,2}$",
+          "description": "1-999 秒；超时上限 1050s"
+        },
+        {
+          "name": "output",
+          "label": "输出 CSV",
+          "default": "/tmp/perf.csv",
+          "pattern": "^/tmp/[A-Za-z0-9._-]{1,64}\\.csv$",
+          "description": "只允许写到 /tmp 下的 .csv 文件"
+        }
+      ]
+    },
+    {
+      "id": "gpu-sample",
+      "name": "GPU 时钟采样",
+      "description": "用 tools/gpu-sample.sh 采样 N 秒 GPU 时钟到 CSV（只读观测）。",
+      "risk": "readonly",
+      "timeoutSec": 1050,
+      "argv": ["bash", "tools/gpu-sample.sh", "{{seconds}}", "{{output}}"],
+      "params": [
+        {
+          "name": "seconds",
+          "label": "采样秒数",
+          "default": "60",
+          "pattern": "^[1-9][0-9]{0,2}$",
+          "description": "1-999 秒；超时上限 1050s"
+        },
+        {
+          "name": "output",
+          "label": "输出 CSV",
+          "default": "/tmp/gpu.csv",
+          "pattern": "^/tmp/[A-Za-z0-9._-]{1,64}\\.csv$",
+          "description": "只允许写到 /tmp 下的 .csv 文件"
+        }
+      ]
+    }
+  ]
+}
