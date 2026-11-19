@@ -27,11 +27,11 @@ from urllib.parse import urlparse
 
 GENSHIN_DIR = "/home/h/dsh-plugins/.scratch/genshin-mobile"
 GENSHIN_COMMANDS: dict[str, str] = {
-    "play-inject": "./mobui-play.sh mobui29.dll",
+    "play-inject": "./mobui-play.sh mobui30.dll",
     "ui-touch": "./mobui-ui.sh touch",
     "ui-pc": "./mobui-ui.sh pc",
     "ui-status": "./mobui-ui.sh status",
-    "set-gain": "printf 'gain 35\\n' >> build/mobui29.cmds",
+    "set-gain": "./mobui-gain.sh 35",
     "touchd-start": (
         "systemd-run --user --collect --unit=mobui-touchd "
         "--working-directory=/home/h/dsh-plugins/.scratch/genshin-mobile/tools "
@@ -356,12 +356,15 @@ def phase_main(prober: Prober) -> None:
     )
     p.check(
         "render.gain.40",
-        status == 200 and rendered.get("display") == "printf 'gain 40\\n' >> build/mobui29.cmds",
+        status == 200 and rendered.get("display") == "./mobui-gain.sh 40",
         short((rendered or {}).get("display")),
     )
     p.check(
-        "render.gain.uses_shell",
-        status == 200 and rendered.get("usesShell") is True and rendered.get("argv", [""])[0].endswith("bash"),
+        "render.gain.uses_argv",
+        # set-gain 走脚本 argv（重定向搬进 mobui-gain.sh），不再用 shell 模板：
+        # 模板里写死 build/mobui29.cmds 会在探针版本漂移时静默失效。
+        status == 200 and rendered.get("usesShell") is False
+        and rendered.get("argv") == ["./mobui-gain.sh", "40"],
         short((rendered or {}).get("argv")),
     )
     for label, params in [
@@ -418,7 +421,7 @@ def phase_main(prober: Prober) -> None:
     )
     p.check(
         "confirm.backend.details",
-        (data.get("details") or {}).get("display") == "./mobui-play.sh mobui29.dll",
+        (data.get("details") or {}).get("display") == "./mobui-play.sh mobui30.dll",
         short((data or {}).get("details")),
     )
     _, health_after, _ = p.get_json("/api/health")

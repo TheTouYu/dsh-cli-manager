@@ -231,7 +231,7 @@ if command -v chromium >/dev/null 2>&1; then
       fi
     }
     dom_text './mobui-ui.sh status' 'ui_status_command'
-    dom_text "printf 'gain 35" 'set_gain_default'
+    dom_text './mobui-gain.sh 35' 'set_gain_default'
     dom_text '查当前 UI 模式' 'ui_status_name'
     dom_text '原神触摸/串流' 'genshin_module'
     dom_text '演示模块' 'demo_module'
