@@ -241,3 +241,12 @@ python3 test/api_check.py --base-url http://127.0.0.1:8977 --phase hot --modules
 - **渲染真源在服务端**：前端参数改动调用 `/api/render`，UI 显示的文本与后端真正执行的 argv 同源，避免“显示一条、执行另一条”。
 - **危险确认双向**：前端弹窗解决误触，后端 `confirm` 兜住直接调 API / 前端 bug 的情况。
 - **不引入前端框架**：单页零依赖，加载快、可离线、易审计；用原生 DOM + 事件委托控制复杂度。
+
+## 桌面入口
+
+装了一个桌面图标「**cli管理器**」（`~/.local/share/applications/cli-manager.desktop`，桌面上有软链）：
+
+- `Exec` 指向 `bin/cli-manager-launch` —— 幂等：服务已在跑就只开页面，否则用 `systemd-run --user`
+  起服务（单元 `cli-manager-8977`，图标进程退出后继续跑），等 `/api/health` 就绪再开浏览器
+- 服务日志：`/tmp/cli-manager-server.log`
+- 手动起停：`systemctl --user status|stop cli-manager-8977`

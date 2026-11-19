@@ -1,0 +1,62 @@
+#!/bin/bash
+# cli管理器 桌面入口：保证服务在跑，然后打开浏览器。
+# 幂等：已经在跑就只开页面，不重复起进程。
+set -u
+
+REPO=/home/h/dsh-plugins/dsh-cli-manager
+PORT=${CLI_MANAGER_PORT:-8977}
+URL="http://127.0.0.1:$PORT"
+UNIT="cli-manager-$PORT"
+LOG=/tmp/cli-manager-server.log
+NOTIFY=/home/h/.local/bin/dsh-notify
+
+# 桌面图标启动时环境不完整，显式补齐 Hyprland 会话变量
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+export DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}
+
+healthy() { curl -sf --max-time 2 "$URL/api/health" >/dev/null 2>&1; }
+
+openpage() {
+  if command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL" >/dev/null 2>&1 && return 0; fi
+  command -v gio >/dev/null 2>&1 && gio open "$URL" >/dev/null 2>&1 && return 0
+  return 1
+}
+
+notify() {
+  [ -x "$NOTIFY" ] && "$NOTIFY" --summary "$1" ${2:+--body "$2"} --urgency "${3:-normal}" \
+    --key cli-manager --source cli-manager-launch >/dev/null 2>&1
+}
+
+# ---- 已在跑：直接开页面 ----
+if healthy; then
+  openpage && exit 0
+  exit 0
+fi
+
+# ---- 起服务：交给 systemd，图标进程退出后继续跑 ----
+[ -d "$REPO" ] || { notify "cli管理器 启动失败" "找不到 $REPO" critical; exit 3; }
+
+if systemctl --user is-active --quiet "$UNIT" 2>/dev/null; then
+  systemctl --user stop "$UNIT" 2>/dev/null   # 活着但不健康 → 重起
+fi
+systemctl --user reset-failed "$UNIT" 2>/dev/null
+
+systemd-run --user --collect --unit="$UNIT" \
+  --working-directory="$REPO" \
+  -p StandardOutput=append:"$LOG" \
+  -p StandardError=append:"$LOG" \
+  "$REPO/start.sh" --port "$PORT" >/dev/null 2>&1
+
+# ---- 等就绪（最多 10 秒）----
+for _ in $(seq 1 40); do
+  healthy && break
+  sleep 0.25
+done
+
+if healthy; then
+  openpage || notify "cli管理器 已启动" "服务在 $URL，浏览器没打开，手动访问" normal
+  exit 0
+fi
+
+notify "cli管理器 启动失败" "看 $LOG" critical
+exit 1

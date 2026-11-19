@@ -27,7 +27,7 @@ from urllib.parse import urlparse
 
 GENSHIN_DIR = "/home/h/dsh-plugins/.scratch/genshin-mobile"
 GENSHIN_COMMANDS: dict[str, str] = {
-    "play-inject": "./mobui-play.sh mobui30.dll",
+    "play-inject": "bin/genshin-mobile-launch",
     "ui-touch": "./mobui-ui.sh touch",
     "ui-pc": "./mobui-ui.sh pc",
     "ui-status": "./mobui-ui.sh status",
@@ -421,7 +421,7 @@ def phase_main(prober: Prober) -> None:
     )
     p.check(
         "confirm.backend.details",
-        (data.get("details") or {}).get("display") == "./mobui-play.sh mobui30.dll",
+        (data.get("details") or {}).get("display") == "bin/genshin-mobile-launch",
         short((data or {}).get("details")),
     )
     _, health_after, _ = p.get_json("/api/health")

@@ -14,13 +14,12 @@
     {
       "id": "play-inject",
       "name": "启动游戏+注入+切 UI",
-      "description": "一键起原神（独立 systemd unit，dsh 重启不连坐）→ 等登录页 → 注入 mobui30.dll → 切移动端 UI。",
+      "description": "启动游戏并注入探针（走统一入口 bin/genshin-mobile-launch，跟随当前默认版本，不再写死 DLL）",
       "risk": "medium",
       "timeoutSec": 300,
       "confirmHint": "这会真的启动原神并注入探针，可能占用大量内存/显存；请确认当前没有正在运行的游戏实例。",
       "argv": [
-        "./mobui-play.sh",
-        "mobui30.dll"
+        "bin/genshin-mobile-launch"
       ]
     },
     {
