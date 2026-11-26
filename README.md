@@ -26,6 +26,25 @@
 - **安全**：只监听回环地址；命令模板只来自本机配置，客户端永远不能提交命令字符串；危险级中/高命令前端弹窗 + **后端强制 `confirm: true`**；参数严格校验；CSRF / Origin / Host 防护。
 - **好用**：深色中文界面、键盘优先（`/` 搜索、`↑↓` 选择、`Enter` 执行、`c` 复制）、危险级筛选、运行历史、响应式布局。
 
+## 跨平台（Linux / Windows）
+
+模块可以按平台归属，同一个面板在 Windows 上只露出能跑的命令：
+
+| 配置键 | 位置 | 含义 |
+|---|---|---|
+| `platform` | 模块顶层 / 单条命令 | `linux` / `windows` / `all`（默认 `all`）；命令级覆盖模块级 |
+| `${VAR}` | 模块 `cwd`、命令 `argv[]`、`env` 的值 | 展开服务器进程的环境变量；未定义时保留原文并产生装载告警（不报错） |
+
+- 当前平台由 `CLI_MANAGER_PLATFORM` 覆盖（`linux` / `windows`），否则按 `sys.platform` 判定；可用它在本机预演 Windows 视角。
+- 平台不匹配的命令：界面默认隐藏（工具栏显示「已隐藏 N 条（其他平台）」），`/api/render` 仍可预览，`/api/run` 返回 `400 platform_mismatch`（后端硬闸门）。
+- `modules/*.example.json` 不会被加载——`modules/genshin-touch-win.example.json` 就是 Win11 的模块样例，复制改名并设置 `GX_DIR` 后启用。
+- Win11 的落地计划见 [`docs/win11-plan.md`](docs/win11-plan.md)。
+
+```bash
+# 在 Linux 上预演 Windows 视角（只影响平台判定，不影响真实执行）
+CLI_MANAGER_PLATFORM=windows ./start.sh --port 8980
+```
+
 ## 快速开始
 
 ```bash

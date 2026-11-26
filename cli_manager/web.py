@@ -23,6 +23,8 @@ from .config import (
     ConfigError,
     Module,
     ModuleLoader,
+    current_platform,
+    platform_available,
 )
 from .runner import Run, RunRegistry
 
@@ -342,6 +344,13 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
         def _api_run(self) -> None:
             body = self._read_json()
             module, command = self._resolve_command(body)
+            if not platform_available(command.platform):
+                raise ApiError(
+                    400,
+                    f"该命令仅适用于 {command.platform}（当前 {current_platform()}）",
+                    "platform_mismatch",
+                    {"platform": command.platform, "current": current_platform()},
+                )
             try:
                 rendered = command.render(self._params_of(body))
             except ConfigError as exc:

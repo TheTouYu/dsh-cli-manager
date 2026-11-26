@@ -33,6 +33,11 @@ RISK_LEVELS: dict[str, str] = {
 #: 中/高危险级命令，后端强制要求 confirm: true
 CONFIRM_RISKS = frozenset({"medium", "high"})
 
+#: 命令归属平台；``all`` 表示两个平台都显示
+PLATFORMS: tuple[str, ...] = ("linux", "windows", "all")
+DEFAULT_PLATFORM = "all"
+PLATFORM_LABELS: dict[str, str] = {"linux": "仅 Linux", "windows": "仅 Windows", "all": ""}
+
 DEFAULT_TIMEOUT = 120
 MAX_TIMEOUT = 1800
 MAX_PARAMS = 16
@@ -44,8 +49,22 @@ MODULE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 COMMAND_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 PARAM_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,31}$")
 TEMPLATE_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
+#: 环境变量引用；只展开 cwd / argv / env 的值，shell 模板交给 bash 运行时展开
+VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 SHELL_PATH = shutil.which("bash") or "/bin/sh"
+
+
+def current_platform() -> str:
+    """当前平台；``CLI_MANAGER_PLATFORM`` 可覆盖（测试与跨平台预演用）。"""
+    override = os.environ.get("CLI_MANAGER_PLATFORM", "").strip().lower()
+    if override in ("linux", "windows"):
+        return override
+    return "windows" if sys.platform.startswith("win") else "linux"
+
+
+def platform_available(platform: str) -> bool:
+    return platform == DEFAULT_PLATFORM or platform == current_platform()
 
 
 class ConfigError(Exception):
@@ -121,6 +140,7 @@ class Command:
     argv: list[str] | None
     confirm_hint: str
     env: dict[str, str]
+    platform: str = DEFAULT_PLATFORM
     module_id: str = ""
     module_name: str = ""
     module: "Module | None" = None
@@ -192,6 +212,9 @@ class Command:
             "confirmHint": self.confirm_hint,
             "timeoutSec": self.timeout_sec,
             "executor": "shell" if self.shell is not None else "argv",
+            "platform": self.platform,
+            "platformLabel": PLATFORM_LABELS.get(self.platform, self.platform),
+            "platformAvailable": platform_available(self.platform),
             "params": [p.to_dict() for p in self.params],
             "preview": self.preview_dict(),
         }
@@ -245,6 +268,26 @@ class LoadResult:
 # ---------------------------------------------------------------------------
 
 
+def _expand_vars(text: str, where: str, warnings: list[dict[str, str]]) -> str:
+    """展开 ``${VAR}``；未定义的变量保留原文并记一条告警（同一来源只报一次）。"""
+    missing: list[str] = []
+
+    def repl(match: re.Match[str]) -> str:
+        name = match.group(1)
+        value = os.environ.get(name)
+        if value is None:
+            missing.append(name)
+            return match.group(0)
+        return value
+
+    out = VAR_RE.sub(repl, text)
+    if missing:
+        warnings.append(
+            {"source": where, "message": f"未定义环境变量：{'、'.join(sorted(set(missing)))}（保留原文）"}
+        )
+    return out
+
+
 def _require_str(value: Any, field_name: str) -> str:
     if not isinstance(value, str):
         raise ConfigError(f"字段 {field_name} 必须是字符串")
@@ -293,7 +336,9 @@ def _parse_param(raw: Any, command_id: str, index: int) -> Param:
     return param
 
 
-def _parse_command(raw: Any, source: str, index: int) -> tuple[Command, list[dict[str, str]]]:
+def _parse_command(
+    raw: Any, source: str, index: int, default_platform: str = DEFAULT_PLATFORM
+) -> tuple[Command, list[dict[str, str]]]:
     where = f"{source} commands[{index}]"
     if not isinstance(raw, dict):
         raise ConfigError(f"{where} 必须是对象")
@@ -379,6 +424,12 @@ def _parse_command(raw: Any, source: str, index: int) -> tuple[Command, list[dic
             {"source": source, "message": f"命令 {command_id} 的参数未在模板中使用：{'、'.join(unused)}"}
         )
 
+    platform = raw.get("platform", default_platform)
+    if not isinstance(platform, str) or platform not in PLATFORMS:
+        raise ConfigError(
+            f"{where} 的 platform 必须是 {' / '.join(PLATFORMS)} 之一（当前：{platform!r}）"
+        )
+
     confirm_hint = raw.get("confirmHint", "")
     if not isinstance(confirm_hint, str):
         raise ConfigError(f"{where} 的 confirmHint 必须是字符串")
@@ -392,7 +443,10 @@ def _parse_command(raw: Any, source: str, index: int) -> tuple[Command, list[dic
             raise ConfigError(f"{where} 的 env 变量名不合法：{key!r}")
         if not isinstance(value, str) or any(ch in value for ch in CONTROL_CHARS):
             raise ConfigError(f"{where} 的 env.{key} 必须是不含控制字符的字符串")
-        env[key] = value
+        env[key] = _expand_vars(value, f"{where}.env", warnings)
+
+    if argv is not None:
+        argv = [_expand_vars(item, f"{where}.argv", warnings) for item in argv]
 
     command = Command(
         id=command_id,
@@ -405,6 +459,7 @@ def _parse_command(raw: Any, source: str, index: int) -> tuple[Command, list[dic
         argv=list(argv) if argv is not None else None,
         confirm_hint=confirm_hint,
         env=env,
+        platform=platform,
     )
     return command, warnings
 
@@ -413,7 +468,7 @@ def _parse_module(raw: Any, source: str, app_root: str, path: str) -> tuple[Modu
     if not isinstance(raw, dict):
         raise ConfigError("模块文件必须是 JSON 对象")
     warnings: list[dict[str, str]] = []
-    known_top = {"id", "name", "description", "cwd", "notes", "order", "commands"}
+    known_top = {"id", "name", "description", "cwd", "notes", "order", "commands", "platform"}
     for key in raw:
         if key not in known_top:
             warnings.append({"source": source, "message": f"未知字段 {key}（已忽略）"})
@@ -438,6 +493,7 @@ def _parse_module(raw: Any, source: str, app_root: str, path: str) -> tuple[Modu
     if not isinstance(cwd_raw, str) or not cwd_raw.strip():
         raise ConfigError("模块 cwd 必须是非空字符串")
     cwd_raw = cwd_raw.strip()
+    cwd_raw = _expand_vars(cwd_raw, f"{source}.cwd", warnings)
     expanded = os.path.expanduser(cwd_raw)
     if os.path.isabs(expanded):
         cwd = os.path.abspath(expanded)
@@ -455,13 +511,19 @@ def _parse_module(raw: Any, source: str, app_root: str, path: str) -> tuple[Modu
     if isinstance(order, bool) or not isinstance(order, int):
         raise ConfigError("模块 order 必须是整数")
 
+    default_platform = raw.get("platform", DEFAULT_PLATFORM)
+    if not isinstance(default_platform, str) or default_platform not in PLATFORMS:
+        raise ConfigError(
+            f"模块 platform 必须是 {' / '.join(PLATFORMS)} 之一（当前：{default_platform!r}）"
+        )
+
     commands_raw = raw.get("commands")
     if not isinstance(commands_raw, list) or not commands_raw:
         raise ConfigError("模块 commands 必须是非空数组")
     commands: list[Command] = []
     seen: set[str] = set()
     for i, item in enumerate(commands_raw):
-        command, cmd_warnings = _parse_command(item, source, i)
+        command, cmd_warnings = _parse_command(item, source, i, default_platform)
         if command.id in seen:
             raise ConfigError(f"命令 id 重复：{command.id}")
         seen.add(command.id)
@@ -544,7 +606,9 @@ class ModuleLoader:
 
         try:
             names = sorted(
-                n for n in os.listdir(self.modules_dir) if n.endswith(".json") and not n.startswith(".")
+                n
+                for n in os.listdir(self.modules_dir)
+                if n.endswith(".json") and not n.startswith(".") and not n.endswith(".example.json")
             )
         except OSError as exc:
             names = []

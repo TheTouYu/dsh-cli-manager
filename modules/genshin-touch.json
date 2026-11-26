@@ -2,6 +2,7 @@
   "id": "genshin-touch",
   "name": "原神触摸/串流",
   "order": 10,
+  "platform": "linux",
   "description": "原神触摸注入与串流调试命令。cwd 固定为 genshin-mobile 项目目录，命令与真实脚本一一对应。",
   "cwd": "/home/h/dsh-plugins/.scratch/genshin-mobile",
   "notes": [

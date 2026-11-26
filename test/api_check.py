@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import http.client
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -298,6 +299,16 @@ def phase_main(prober: Prober) -> None:
     p.check("genshin.present", bool(genshin))
     p.check("genshin.name", genshin.get("name") == "原神触摸/串流", str(genshin.get("name")))
     p.check("genshin.cwd", genshin.get("cwd") == GENSHIN_DIR, str(genshin.get("cwd")))
+    genshin_cmds = {command["id"]: command for command in genshin.get("commands", [])}
+    p.check(
+        "genshin.platform",
+        bool(genshin_cmds)
+        and all(
+            command.get("platform") == "linux" and command.get("platformAvailable") is True
+            for command in genshin_cmds.values()
+        ),
+        short([(cid, c.get("platform"), c.get("platformAvailable")) for cid, c in list(genshin_cmds.items())[:3]]),
+    )
     p.check("genshin.cwd_exists", genshin.get("cwdExists") is True)
     p.check("genshin.notes", isinstance(genshin.get("notes"), list) and len(genshin["notes"]) >= 2, f"{len(genshin.get('notes', []))} 条提示")
 
@@ -626,6 +637,70 @@ def phase_hot(prober: Prober, modules_dir: str) -> None:
         f"HTTP {status} code={exit_data.get('code')}",
     )
     p.check("hot.run.events", event_types(events)[:1] == ["start"] and "exit" in event_types(events), ",".join(event_types(events)))
+
+    # ---- 平台归属与 ${VAR} 展开（步骤 6 新增）--------------------------------
+    platform_fixture = {
+        "id": "plat-demo",
+        "name": "平台与变量测试",
+        "order": 60,
+        "cwd": "${HOME}",
+        "commands": [
+            {
+                "id": "win-only",
+                "name": "仅 Windows",
+                "risk": "low",
+                "timeoutSec": 10,
+                "platform": "windows",
+                "argv": ["echo", "win"],
+            },
+            {
+                "id": "var-echo",
+                "name": "变量展开",
+                "risk": "low",
+                "timeoutSec": 10,
+                "argv": ["echo", "${HOME}/var-ok"],
+            },
+        ],
+    }
+    (directory / "plat-module.json").write_text(
+        json.dumps(platform_fixture, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    time.sleep(0.05)
+    status, data, _ = p.get_json("/api/modules")
+    plat_modules = {m["id"]: m for m in (data or {}).get("modules", [])}
+    plat_cmds = {c["id"]: c for c in (plat_modules.get("plat-demo") or {}).get("commands", [])}
+    p.check(
+        "platform.field",
+        (plat_cmds.get("win-only") or {}).get("platform") == "windows"
+        and (plat_cmds.get("win-only") or {}).get("platformAvailable") is False,
+        short(plat_cmds.get("win-only")),
+    )
+    home = os.environ.get("HOME", "")
+    p.check(
+        "vars.expanded",
+        ((plat_cmds.get("var-echo") or {}).get("preview") or {}).get("display") == f"echo {home}/var-ok",
+        short((plat_cmds.get("var-echo") or {}).get("preview")),
+    )
+    status, data, _ = p.post_json("/api/render", {"moduleId": "plat-demo", "commandId": "win-only"})
+    p.check(
+        "platform.render_allowed",
+        status == 200 and (data or {}).get("display") == "echo win",
+        f"HTTP {status} {short(data)}",
+    )
+    status, data, _ = p.post_json("/api/run", {"moduleId": "plat-demo", "commandId": "win-only"})
+    p.check(
+        "platform.run_blocked",
+        status == 400 and (data or {}).get("code") == "platform_mismatch",
+        f"HTTP {status} {short(data)}",
+    )
+    status, data, run_id, events = p.run("plat-demo", "var-echo")
+    p.check(
+        "vars.run",
+        status == 200
+        and last_exit(events).get("code") == 0
+        and f"{home}/var-ok" in stream_text(events, "stdout"),
+        f"HTTP {status} {short(stream_text(events, 'stdout'))}",
+    )
 
     (directory / "broken.json").write_text("{ 这不是 JSON", encoding="utf-8")
     time.sleep(0.05)

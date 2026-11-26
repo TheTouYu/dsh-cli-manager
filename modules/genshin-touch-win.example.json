@@ -1,0 +1,48 @@
+{
+  "id": "genshin-touch-win",
+  "name": "原神触摸（Windows 示例）",
+  "order": 20,
+  "platform": "windows",
+  "description": "Win11 上的原神移动端 UI 命令示例。本文件是 .example.json，不会被加载；复制成 genshin-touch-win.json 并补上 GX_DIR 后再启用。",
+  "cwd": "${GX_DIR}",
+  "notes": [
+    "前置：把 GX_DIR 设成 Windows 上的项目目录（例如 D:\\\\games\\\\genshin-mobile），或直接把 cwd 写成绝对路径。",
+    "Windows 侧的启动/切换脚本尚未实现，见仓库 docs/win11-plan.md 的“要落的三个部件”。",
+    "命令里的 ${PROBE_CMDS} 指当前生效探针的 cmds 文件路径；Windows 探针同样通过追加命令文件在运行中切换 UI。"
+  ],
+  "commands": [
+    {
+      "id": "play-inject",
+      "name": "启动游戏+注入+切 UI",
+      "description": "示例：调用 Windows 启动器（待实现），拉起游戏→（必要时）注入探针→切移动端 UI",
+      "risk": "medium",
+      "timeoutSec": 300,
+      "confirmHint": "这会真的启动原神并在需要时注入探针。",
+      "argv": ["cmd", "/c", "start", "", "${GX_DIR}\\bin\\genshin-mobile-launch.cmd"]
+    },
+    {
+      "id": "ui-touch",
+      "name": "切移动端 UI",
+      "description": "示例：向探针命令文件追加 touch_null（Windows 下用 cmd 追加）",
+      "risk": "low",
+      "timeoutSec": 30,
+      "argv": ["cmd", "/c", "echo touch_null>>", "${PROBE_CMDS}"]
+    },
+    {
+      "id": "ui-pc",
+      "name": "切 PC UI",
+      "description": "示例：向探针命令文件追加 uipc",
+      "risk": "low",
+      "timeoutSec": 30,
+      "argv": ["cmd", "/c", "echo uipc>>", "${PROBE_CMDS}"]
+    },
+    {
+      "id": "ui-status",
+      "name": "查当前 UI 模式",
+      "description": "示例：读探针日志里最后一条 mode9EC0（待实现为 Windows 脚本）",
+      "risk": "readonly",
+      "timeoutSec": 30,
+      "argv": ["powershell", "-NoProfile", "-Command", "Get-Content '${PROBE_LOG}' -Tail 5"]
+    }
+  ]
+}

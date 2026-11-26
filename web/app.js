@@ -257,6 +257,18 @@ function activeModule() {
   return state.modules.find((m) => m.id === state.activeModuleId) || null;
 }
 
+// 当前平台不可用的命令数（module 为 null 时统计全部模块）
+function hiddenPlatformCount(module) {
+  const modules = module ? [module] : state.modules;
+  let count = 0;
+  for (const m of modules) {
+    for (const command of m.commands) {
+      if (command.platformAvailable === false) count += 1;
+    }
+  }
+  return count;
+}
+
 function visibleItems() {
   const query = state.query.trim().toLowerCase();
   const modules = query
@@ -265,6 +277,7 @@ function visibleItems() {
   const items = [];
   for (const module of modules) {
     for (const command of module.commands) {
+      if (command.platformAvailable === false) continue;
       if (state.riskFilter !== "all" && command.risk !== state.riskFilter) continue;
       if (query) {
         const preview = state.previews[keyOf(module, command)];
@@ -479,9 +492,13 @@ function renderCommands() {
 
   const module = activeModule();
   const total = state.modules.reduce((sum, m) => sum + m.commands.length, 0);
-  $("#list-meta").textContent = state.query
-    ? `在全部模块中找到 ${items.length} 条命令（共 ${total} 条）`
-    : `${module ? module.name : "—"} · ${items.length} 条命令${state.riskFilter !== "all" ? "（已筛选）" : ""}`;
+  const hiddenPlatform = hiddenPlatformCount(state.query ? null : module);
+  const hiddenNote = hiddenPlatform ? ` · 已隐藏 ${hiddenPlatform} 条（其他平台）` : "";
+  $("#list-meta").textContent =
+    (state.query
+      ? `在全部模块中找到 ${items.length} 条命令（共 ${total} 条）`
+      : `${module ? module.name : "—"} · ${items.length} 条命令${state.riskFilter !== "all" ? "（已筛选）" : ""}`) +
+    hiddenNote;
 
   renderModuleNotes();
 
@@ -523,6 +540,7 @@ function commandCard({ module, command, key }) {
       h("span", { class: `risk-badge risk-${command.risk}` }, risk.label),
       h("h3", { class: "cmd-name" }, command.name),
       command.needsConfirm ? h("span", { class: "confirm-chip" }, "需二次确认") : null,
+      command.platformLabel ? h("span", { class: "platform-chip" }, command.platformLabel) : null,
       h("span", { class: "cmd-id" }, command.id)
     ),
     h("p", { class: "cmd-desc" }, command.description || "（无说明）"),

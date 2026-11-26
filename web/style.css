@@ -690,6 +690,15 @@ pre,
   border: 1px dashed rgba(251, 191, 36, 0.45);
 }
 
+.platform-chip {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  color: #b8d4ff;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.4);
+}
+
 .cmd-desc {
   margin: 6px 0 9px;
   font-size: 12px;
