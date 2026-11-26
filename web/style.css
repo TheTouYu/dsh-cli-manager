@@ -1323,3 +1323,12 @@ pre,
     transition: none !important;
   }
 }
+
+/* 其他平台的命令：搜索命中时置灰显示，不可执行 */
+.cmd.unavailable {
+  opacity: 0.55;
+  border-style: dashed;
+}
+.cmd.unavailable .run-btn {
+  cursor: not-allowed;
+}

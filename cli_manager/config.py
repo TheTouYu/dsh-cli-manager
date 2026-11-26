@@ -608,7 +608,7 @@ class ModuleLoader:
             names = sorted(
                 n
                 for n in os.listdir(self.modules_dir)
-                if n.endswith(".json") and not n.startswith(".") and not n.endswith(".example.json")
+                if n.endswith(".json") and not n.startswith(".")
             )
         except OSError as exc:
             names = []

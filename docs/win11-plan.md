@@ -30,9 +30,14 @@
    - 每个命令增加 `platform: "linux" | "windows" | "all"`，界面只显示当前平台可用的；
    - Windows 侧命令用 `.bat` / `.exe` / `powershell -File` 包装。
 
+## 范围声明
+
+本计划的前三项里，只有第 3 项（CLI 管理器跨平台化）是**本仓库当前范围**；Windows launcher 与探针的 Windows 构建属于 genshin-mobile 仓库，另立计划。
+`start.sh`、`SHELL_PATH`、`os.killpg` 目前都是 Linux 语义，Windows 上的启动/停止执行器尚未实现（见下方清单）。
+
 ## 立即可做（不依赖 Windows，先做通用增强）
 
-- [ ] 模块 JSON：`${VAR}` 展开 + `platform` 字段过滤（同一份模块可跨平台，Win11 只多一个 `genshin-touch-win.json`）
+- [x] 模块 JSON：`${VAR}` 展开 + `platform` 字段过滤（2026-11-26 完成：`cli_manager/config.py` 的 `_expand_vars`/`platform`，前端过滤与 `/api/run` 硬闸门；示例见 `modules/genshin-touch-win.json.example`）
 - [ ] 命令执行器：Windows 下用 `subprocess` + `CREATE_NEW_PROCESS_GROUP`，停止用 `taskkill /T /F`
 - [ ] 状态探测：用"哪份 `.log` 最新"认领当前探针版本（Linux 版已这么做），Windows 侧路径换成 `%LOCALAPPDATA%` 或项目目录
 

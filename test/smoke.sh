@@ -269,6 +269,78 @@ fi
 stop_server
 
 say ""
+say "===== 5b. 平台过滤（DOM，CLI_MANAGER_PLATFORM 预演） ====="
+PLAT_DIR="$TMP/platform-modules"
+mkdir -p "$PLAT_DIR"
+cat > "$PLAT_DIR/win-fixture.json" <<'JSON'
+{
+  "id": "win-fixture",
+  "name": "仅Windows示例",
+  "order": 10,
+  "platform": "windows",
+  "cwd": "/tmp",
+  "commands": [
+    {"id": "hello", "name": "回声", "description": "echo hello-win", "risk": "low", "timeoutSec": 10, "argv": ["echo", "hello-win"]}
+  ]
+}
+JSON
+
+if command -v chromium >/dev/null 2>&1; then
+  plat_dom() {  # plat_dom <port> <outfile> [env...]
+    local port="$1" out="$2"; shift 2
+    env "$@" "$ROOT/start.sh" --port "$port" --modules-dir "$PLAT_DIR" >"$TMP/server-$port.log" 2>&1 &
+    local pid=$!
+    local ok=0
+    for _ in $(seq 1 50); do
+      if curl -s --max-time 1 "http://127.0.0.1:$port/api/health" >/dev/null 2>&1; then ok=1; break; fi
+      sleep 0.1
+    done
+    if [[ "$ok" != "1" ]]; then kill "$pid" 2>/dev/null; return 1; fi
+    chromium --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
+      --user-data-dir="$TMP/chrome-plat-$port" --virtual-time-budget=5000 \
+      --dump-dom "http://127.0.0.1:$port/" >"$out" 2>"$TMP/chromium-$port.err" || { kill "$pid" 2>/dev/null; return 1; }
+    kill "$pid" 2>/dev/null
+    return 0
+  }
+
+  LINUX_PORT="$(find_free_port $((PORT + 20)) 2>/dev/null || true)"
+  if [[ -n "$LINUX_PORT" ]] && plat_dom "$LINUX_PORT" "$TMP/dom-plat-linux.html"; then
+    CARDS="$(grep -o 'data-command-id="' "$TMP/dom-plat-linux.html" | wc -l | tr -d ' ')"
+    if [[ "$CARDS" == "0" ]]; then
+      pass "platform.dom.linux_hidden" "Linux 平台下 windows 命令卡片数=0"
+    else
+      fail "platform.dom.linux_hidden" "期望 0，实得 $CARDS"
+    fi
+    if grep -Fq '已隐藏 1 条（其他平台）' "$TMP/dom-plat-linux.html"; then
+      pass "platform.dom.hidden_note" "工具栏显示已隐藏计数"
+    else
+      fail "platform.dom.hidden_note" "未找到“已隐藏 1 条（其他平台）”"
+    fi
+  else
+    fail "platform.dom.linux" "起服务或 chromium 失败"
+  fi
+
+  WIN_PORT="$(find_free_port $((PORT + 30)) 2>/dev/null || true)"
+  if [[ -n "$WIN_PORT" ]] && plat_dom "$WIN_PORT" "$TMP/dom-plat-win.html" CLI_MANAGER_PLATFORM=windows; then
+    CARDS="$(grep -o 'data-command-id="' "$TMP/dom-plat-win.html" | wc -l | tr -d ' ')"
+    if [[ "$CARDS" == "1" ]]; then
+      pass "platform.dom.windows_visible" "Windows 视角下卡片数=1"
+    else
+      fail "platform.dom.windows_visible" "期望 1，实得 $CARDS"
+    fi
+    if grep -Fq '仅 Windows' "$TMP/dom-plat-win.html"; then
+      pass "platform.dom.chip" "卡片显示「仅 Windows」徽标"
+    else
+      fail "platform.dom.chip" "未找到「仅 Windows」徽标"
+    fi
+  else
+    fail "platform.dom.windows" "起服务或 chromium 失败"
+  fi
+else
+  skip "platform.dom" "没有 chromium，跳过 DOM 断言"
+fi
+
+say ""
 say "===== 6. 收尾 ====="
 info "主阶段端口: $PORT；热加载阶段端口: ${HOT_PORT:-—}"
 info "启动命令: cd $ROOT && ./start.sh --port 8977"

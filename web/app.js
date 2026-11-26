@@ -277,7 +277,7 @@ function visibleItems() {
   const items = [];
   for (const module of modules) {
     for (const command of module.commands) {
-      if (command.platformAvailable === false) continue;
+      const unavailable = command.platformAvailable === false;
       if (state.riskFilter !== "all" && command.risk !== state.riskFilter) continue;
       if (query) {
         const preview = state.previews[keyOf(module, command)];
@@ -289,8 +289,10 @@ function visibleItems() {
           (preview && preview.display) || "",
         ].join(" ").toLowerCase();
         if (!haystack.includes(query)) continue;
+      } else if (unavailable) {
+        continue; // 无搜索时不显示其他平台的命令
       }
-      items.push({ module, command, key: keyOf(module, command) });
+      items.push({ module, command, key: keyOf(module, command), unavailable });
     }
   }
   return items;
@@ -329,7 +331,11 @@ function renderSidebar() {
         "span",
         { class: "module-text" },
         h("span", { class: "module-name" }, module.name),
-        h("span", { class: "module-count" }, `${module.commands.length} 条命令`)
+        h(
+        "span",
+        { class: "module-count" },
+        `${module.commands.filter((c) => c.platformAvailable !== false).length} 条命令`
+      )
       )
     );
     if (!module.cwdExists) {
@@ -492,7 +498,7 @@ function renderCommands() {
 
   const module = activeModule();
   const total = state.modules.reduce((sum, m) => sum + m.commands.length, 0);
-  const hiddenPlatform = hiddenPlatformCount(state.query ? null : module);
+  const hiddenPlatform = state.query ? 0 : hiddenPlatformCount(module);
   const hiddenNote = hiddenPlatform ? ` · 已隐藏 ${hiddenPlatform} 条（其他平台）` : "";
   $("#list-meta").textContent =
     (state.query
@@ -508,7 +514,7 @@ function renderCommands() {
   });
 }
 
-function commandCard({ module, command, key }) {
+function commandCard({ module, command, key, unavailable = false }) {
   const preview = state.previews[key] || { display: "", error: "" };
   const values = state.params[key] || {};
   const selected = key === state.selectedKey;
@@ -518,7 +524,8 @@ function commandCard({ module, command, key }) {
     class:
       `cmd risk-${command.risk}` +
       (selected ? " selected" : "") +
-      (preview.error ? " has-error" : ""),
+      (preview.error ? " has-error" : "") +
+      (unavailable ? " unavailable" : ""),
     tabIndex: 0,
     dataset: { key, commandId: command.id, moduleId: module.id },
     attrs: { role: "option", "aria-selected": selected ? "true" : "false" },
@@ -612,7 +619,8 @@ function commandCard({ module, command, key }) {
         {
           class: "run-btn",
           type: "button",
-          disabled: !!preview.error || !module.cwdExists,
+          disabled: !!preview.error || !module.cwdExists || unavailable,
+          title: unavailable ? `该命令仅适用于 ${command.platformLabel || command.platform}` : undefined,
           on: {
             click: (event) => {
               event.stopPropagation();

@@ -36,7 +36,7 @@
 | `${VAR}` | 模块 `cwd`、命令 `argv[]`、`env` 的值 | 展开服务器进程的环境变量；未定义时保留原文并产生装载告警（不报错） |
 
 - 当前平台由 `CLI_MANAGER_PLATFORM` 覆盖（`linux` / `windows`），否则按 `sys.platform` 判定；可用它在本机预演 Windows 视角。
-- 平台不匹配的命令：界面默认隐藏（工具栏显示「已隐藏 N 条（其他平台）」），`/api/render` 仍可预览，`/api/run` 返回 `400 platform_mismatch`（后端硬闸门）。
+- 平台不匹配的命令：列表里默认隐藏（工具栏显示「已隐藏 N 条（其他平台）」）；**搜索命中时以置灰卡片显示**（徽标标注归属、执行按钮禁用）；侧栏计数只统计当前平台可用命令。`/api/render` 仍可预览，`/api/run` 返回 `400 platform_mismatch`（后端硬闸门）。
 - `modules/*.example.json` 不会被加载——`modules/genshin-touch-win.example.json` 就是 Win11 的模块样例，复制改名并设置 `GX_DIR` 后启用。
 - Win11 的落地计划见 [`docs/win11-plan.md`](docs/win11-plan.md)。
 

@@ -10,6 +10,7 @@
 - `modules/genshin-touch.json`（标注 platform）
 - `modules/genshin-touch-win.example.json`（新增示例，`.example` 不加载）
 - `test/api_check.py`、`test/smoke.sh`（断言回归）
+- `docs/win11-plan.md`（范围声明与勾选）、`README.md`（跨平台一节）、`PLAN.md`
 
 ## 设计决定（先写死，避免边做边改）
 - 平台取值：`linux` / `windows` / `all`（默认 `all`）。
@@ -65,8 +66,28 @@
 - **步骤 3**：`/api/render` win-only 命令 → HTTP 200、`display=echo hello-win`；`/api/run` → HTTP 400、`code=platform_mismatch`；`CLI_MANAGER_PLATFORM=windows` 下 `/api/run` → HTTP 200（runId 返回）。
 - **步骤 4**：chromium headless DOM：仅 windows 模块 + Linux 平台 → `data-command-id` 卡片 0 个、「已隐藏 1 条（其他平台）」、显示「当前筛选条件下没有命令」；`CLI_MANAGER_PLATFORM=windows` → 卡片 1 个、出现「仅 Windows」徽标。
 - **步骤 5**：`genshin-touch.json` 顶层 `platform=linux`；`.example.json` 不加载（仍 2 模块/17 命令）；`genshin-touch platform=linux available=10/10`、`demo platform=all available=7/7`。
-- **步骤 6**：`./test/smoke.sh` → `SMOKE 汇总：PASS=146 FAIL=0 SKIP=0`（新增 `platform.field` / `vars.expanded` / `platform.render_allowed` / `platform.run_blocked` / `vars.run` / `genshin.platform` 6 条）。
+- **步骤 6**：`./test/smoke.sh` → `SMOKE 汇总：PASS=146 FAIL=0 SKIP=0`（API 层新增 6 条断言）；第二轮评审后补 **5b 段**（DOM 平台过滤 4 条断言），复跑结果见下方「第二轮」。
 
-## 评审记录
-- 已按 ds-plan-loop 第 4 步自查：①`describe()` 确实打印 cwd 与 warnings（`config.py:602-623`）②前端命令渲染只有一个入口 `visibleItems()`（app.js:260，另 4 处调用都是同函数）③`api_check.py` 的精确断言集中在 preview 文本与模块数，新增字段不影响 ④`shell` 模板不展开 `${VAR}`，避免与 bash 运行时展开语义打架。
-- 外部评审子代理未在本轮内返回；上述自查覆盖了它要问的三问，未发现需要改计划的项，故按计划执行完毕。
+## 评审记录（两轮）
+
+**第一轮·自检（执行前）**：①`describe()` 打印 cwd/warnings（`config.py:602-623`），不打印 argv/display ②前端卡片渲染只有 `visibleItems()`，但**侧栏计数、列表总数不过滤**（当时漏判）③`api_check.py` 的 `modules.count==2`/`warnings.empty` 会受新模块影响（已用 `.json.example` 规避）④`shell` 模板不展开 `${VAR}`，但**预览保留原文、无告警、argv 是装载快照**（当时漏写）。
+
+**第二轮·外部评审（子代理，只读核对，提交 2a47846 后返回）** 判定「未发现需要改计划的项」不成立，列出 8 条 MISSING，采纳并修复：
+1. 前端过滤无回归测试 → smoke.sh 新增 **5b 段**（临时模块目录 + chromium DOM：Linux 下 0 卡片/「已隐藏 1 条」；`CLI_MANAGER_PLATFORM=windows` 下 1 卡片/「仅 Windows」徽标）。
+2. 终局验收不可达（示例模块被跳过→实际 404 而非 400）→ 示例改名 `genshin-touch-win.json.example`（天然不加载，撤销 loader 特判），平台闸门由 5b 的 fixture 覆盖。
+3. 「搜索命中置灰」未实现 → 已实现：`visibleItems` 无搜索时隐藏、有搜索时置灰返回；卡片加 `.unavailable` 类、执行按钮 disabled、搜索时不显示隐藏计数。
+4. 侧栏模块计数不过滤 → 改为 `commands.filter(c => c.platformAvailable !== false).length`。
+5. `.example.json` 特判与 `signature()` 双规则 → 改名 `.json.example`，loader 回到零特判。
+6. 文档未收口 → `docs/win11-plan.md` 勾选已做项 + 范围声明；README 补置灰/计数行为；本文件「涉及文件」补 `docs/win11-plan.md`。
+7. Windows 侧起不来/停不掉 → PLAN 与 win11-plan 明写：**本计划=Linux 侧前置**，Windows launcher/执行器另立。
+8. `CLI_MANAGER_PLATFORM` 非法值静默回退 → `cli_manager/__main__.py` 启动即校验，非法值退出码 2（实测 `win` → 2 并打印提示）。
+
+**评审提出的未核对项**已复核：`describe()` 不打印 argv；`api_check` 的 `modules.count==2`/`warnings.empty` 是真风险（`known_top` 已含 `platform`）；`shell` 的 `${VAR}` 由 bash 运行时展开、无双重展开。
+
+## 第二轮（评审后修复）执行记录
+
+- **示例模块**：`modules/genshin-touch-win.json.example`（原 `.example.json` 改名），loader 特判撤销；`--check` 仍「2 个模块 / 17 条命令」。
+- **非法平台环境变量**：`CLI_MANAGER_PLATFORM=win ./start.sh --check` → 退出码 2，打印「只能是 linux 或 windows（当前：'win'）」；`=windows` → 退出码 0。
+- **前端**：侧栏计数过滤；搜索命中置灰（`.unavailable` + 执行禁用）；搜索时不显示隐藏计数。
+- **smoke 5b 段**：Linux 平台 DOM → `data-command-id` 卡片 0 个 + 「已隐藏 1 条（其他平台）」；`CLI_MANAGER_PLATFORM=windows` → 卡片 1 个 + 「仅 Windows」徽标。
+- 复跑：`./test/smoke.sh` → `SMOKE 汇总：PASS=150 FAIL=0 SKIP=0`（5b 段 4 条 PASS：`platform.dom.linux_hidden` / `hidden_note` / `windows_visible` / `chip`）。

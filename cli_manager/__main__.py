@@ -44,6 +44,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"端口不合法：{args.port}", file=sys.stderr)
         return 2
 
+    override = os.environ.get("CLI_MANAGER_PLATFORM", "").strip().lower()
+    if override and override not in ("linux", "windows"):
+        print(
+            f"CLI_MANAGER_PLATFORM 只能是 linux 或 windows（当前：{override!r}）；"
+            "留空则按运行系统自动判定",
+            file=sys.stderr,
+        )
+        return 2
+
     modules_dir = os.path.abspath(os.path.expanduser(args.modules_dir))
     loader = ModuleLoader(modules_dir, app_root=ROOT)
 
