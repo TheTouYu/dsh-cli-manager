@@ -250,3 +250,8 @@ python3 test/api_check.py --base-url http://127.0.0.1:8977 --phase hot --modules
   起服务（单元 `cli-manager-8977`，图标进程退出后继续跑），等 `/api/health` 就绪再开浏览器
 - 服务日志：`/tmp/cli-manager-server.log`
 - 手动起停：`systemctl --user status|stop cli-manager-8977`
+
+## 相关仓库
+
+- [TheTouYu/genshin-mobile](https://github.com/TheTouYu/genshin-mobile) —— 本工具首个模块背后的项目：原神 PC 版（Wine）移动端 UI 与进程内 WM_TOUCH 触摸投递，含探针源码、离线验收台与判据文档。
+- Win11 迁移计划：[`docs/win11-plan.md`](docs/win11-plan.md)（启动移动端 UI + 运行时切换要落的部件与待验证清单）。
